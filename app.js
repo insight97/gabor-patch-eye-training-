@@ -5,6 +5,7 @@ let optionsCtx;
 let startBtn;
 let statusText;
 let hintText;
+let feedbackText;
 let resultPanel;
 let resultList;
 let historyList;
@@ -12,8 +13,7 @@ let historyList;
 const CONFIG = {
   blocks: 3,
   trialsPerBlock: 12,
-  responseMs: 15000,
-  optionsCount: 14,
+  optionsCount: 16,
   optionSize: 86,
   optionGapX: 120,
   optionGapY: 110,
@@ -29,7 +29,6 @@ const game = {
   trial: 0,
   awaitingResponse: false,
   trialStart: 0,
-  timeoutId: null,
   sessionTrials: [],
   optionHitboxes: [],
   selectedIndices: new Set(),
@@ -61,6 +60,14 @@ function sleep(ms) {
 function setStatus(text, hint = '') {
   statusText.textContent = text;
   hintText.textContent = hint;
+}
+
+function setFeedback(text = '', type = '') {
+  feedbackText.textContent = text;
+  feedbackText.className = '';
+  if (type) {
+    feedbackText.classList.add(`feedback-${type}`);
+  }
 }
 
 function clearCanvas(ctx, canvas) {
@@ -174,7 +181,7 @@ function renderTarget() {
   if (!game.currentTarget) {
     return;
   }
-  drawGaborPatch(targetCtx, targetCanvas.width / 2, targetCanvas.height / 2, 124, game.currentTarget);
+  drawGaborPatch(targetCtx, targetCanvas.width / 2, targetCanvas.height / 2, CONFIG.optionSize, game.currentTarget);
 }
 
 function renderOptions() {
@@ -241,7 +248,7 @@ function toggleOptionAt(event) {
   renderOptions();
 
   if (setsEqual(game.selectedIndices, game.answerIndices)) {
-    submitCurrentTrial('answered');
+    submitCurrentTrial();
   }
 }
 
@@ -252,18 +259,17 @@ function setsEqual(a, b) {
   return [...a].every((value) => b.has(value));
 }
 
-function submitCurrentTrial(reason = 'answered') {
+function submitCurrentTrial() {
   if (!game.awaitingResponse) {
     return;
   }
 
   game.awaitingResponse = false;
-  clearTimeout(game.timeoutId);
 
-  const rt = reason === 'timeout' ? null : Math.round(performance.now() - game.trialStart);
+  const rt = Math.round(performance.now() - game.trialStart);
   const selectedSorted = [...game.selectedIndices].sort((a, b) => a - b);
   const answerSorted = [...game.answerIndices].sort((a, b) => a - b);
-  const correct = reason !== 'timeout' && setsEqual(game.selectedIndices, game.answerIndices);
+  const correct = setsEqual(game.selectedIndices, game.answerIndices);
 
   game.sessionTrials.push({
     block: game.block,
@@ -276,14 +282,13 @@ function submitCurrentTrial(reason = 'answered') {
   });
 
   const trialTitle = `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`;
-  if (reason === 'timeout') {
-    setStatus(trialTitle, '⏱️ 超時，記為錯誤');
-  } else if (correct) {
+  if (correct) {
     setStatus(trialTitle, `✅ 正確（RT ${rt} ms）`);
+    setFeedback('🎉 完全正確！', 'success');
   } else {
     setStatus(trialTitle, `❌ 錯誤（RT ${rt} ms）`);
+    setFeedback('');
   }
-
 }
 
 function getHistory() {
@@ -313,7 +318,7 @@ function renderHistory() {
 
   history.slice(0, 10).forEach((session) => {
     const li = document.createElement('li');
-    li.textContent = `${session.date}｜正確率 ${session.accuracy}%｜平均 RT ${session.avgRt}`;
+    li.textContent = `${session.date}｜總分 ${session.finalScore}｜正確率 ${session.accuracy}%｜平均 RT ${session.avgRt}`;
     historyList.appendChild(li);
   });
 }
@@ -327,6 +332,8 @@ function summarizeSession() {
     .filter((trial) => Number.isFinite(trial.rt))
     .map((trial) => trial.rt);
   const avgRtValue = rts.length > 0 ? Math.round(rts.reduce((sum, value) => sum + value, 0) / rts.length) : null;
+  const speedScore = avgRtValue === null ? 0 : Math.max(0, Math.min(100, Math.round(100 - avgRtValue / 80)));
+  const finalScore = Math.round(accuracy * 0.7 + speedScore * 0.3);
 
   return {
     date: new Date().toLocaleString('zh-TW', { hour12: false }),
@@ -334,6 +341,8 @@ function summarizeSession() {
     correct: correctCount,
     accuracy,
     avgRt: avgRtValue === null ? '-' : `${avgRtValue} ms`,
+    speedScore,
+    finalScore,
   };
 }
 
@@ -344,6 +353,8 @@ function showResult(summary) {
     `正確：${summary.correct}`,
     `正確率：${summary.accuracy}%`,
     `平均反應時間：${summary.avgRt}`,
+    `速度分數：${summary.speedScore}`,
+    `總分（正確率 70% + 速度 30%）：${summary.finalScore}`,
   ].forEach((text) => {
     const li = document.createElement('li');
     li.textContent = text;
@@ -369,16 +380,12 @@ async function runTrial() {
     `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`,
     `請選出 ${game.answerIndices.size} 個與目標 Gabor Patch 相同的刺激`,
   );
+  setFeedback('');
 
   game.awaitingResponse = true;
   game.trialStart = performance.now();
 
   await new Promise((resolve) => {
-    game.timeoutId = setTimeout(() => {
-      submitCurrentTrial('timeout');
-      resolve();
-    }, CONFIG.responseMs);
-
     const poll = setInterval(() => {
       if (!game.awaitingResponse) {
         clearInterval(poll);
@@ -425,6 +432,7 @@ async function runSession() {
   renderHistory();
 
   setStatus('訓練完成 🎉', `正確率 ${summary.accuracy}% · 平均 RT ${summary.avgRt}`);
+  setFeedback(`🏁 本回合總分：${summary.finalScore}`, 'success');
 }
 
 function initApp() {
@@ -433,6 +441,7 @@ function initApp() {
   startBtn = document.getElementById('startBtn');
   statusText = document.getElementById('statusText');
   hintText = document.getElementById('hintText');
+  feedbackText = document.getElementById('feedbackText');
   resultPanel = document.getElementById('resultPanel');
   resultList = document.getElementById('resultList');
   historyList = document.getElementById('historyList');
@@ -443,6 +452,7 @@ function initApp() {
     !startBtn ||
     !statusText ||
     !hintText ||
+    !feedbackText ||
     !resultPanel ||
     !resultList ||
     !historyList

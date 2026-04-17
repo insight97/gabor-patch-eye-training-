@@ -14,12 +14,14 @@
       <section class="panel controls">
         <button id="startBtn">開始訓練（3 Blocks × 12 Trials）</button>
         <p>操作：點選下方符號可切換選取，全部找對後會自動進入下一題。</p>
+        <p>每題不限時，但會記錄反應時間，並納入分數計算。</p>
         <p class="note">訓練用途，非醫療診斷或治療。</p>
       </section>
 
       <section class="panel status">
         <div id="statusText">尚未開始</div>
         <div id="hintText">準備好後按開始</div>
+        <div id="feedbackText" aria-live="polite"></div>
       </section>
 
       <section class="panel stimulus-wrap">

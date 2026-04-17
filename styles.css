@@ -85,6 +85,32 @@ button:disabled {
   margin-top: 6px;
 }
 
+#feedbackText {
+  min-height: 28px;
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #f9fafb;
+}
+
+.feedback-success {
+  color: #86efac !important;
+  text-shadow: 0 0 12px rgb(34 197 94 / 45%);
+  animation: pulseSuccess 480ms ease-out;
+}
+
+@keyframes pulseSuccess {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .stimulus-wrap {
   display: grid;
   justify-items: center;
