@@ -610,7 +610,7 @@ async function runTrial() {
 
   setStatus(
     `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`,
-    `難度：${generated.difficultyLabel}｜請選出 ${game.requiredMatchCount} 個與目標 Gabor Patch 相同的刺激`,
+    `難度：${generated.difficultyLabel}｜請選出 ${game.requiredMatchCount} 個與目標蓋博符號相同的刺激`,
   );
   setFeedback('');
 
