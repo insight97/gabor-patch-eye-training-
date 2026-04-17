@@ -1,6 +1,9 @@
-const canvas = document.getElementById('stimulusCanvas');
-const ctx = canvas.getContext('2d');
+const targetCanvas = document.getElementById('targetCanvas');
+const targetCtx = targetCanvas.getContext('2d');
+const optionsCanvas = document.getElementById('optionsCanvas');
+const optionsCtx = optionsCanvas.getContext('2d');
 const startBtn = document.getElementById('startBtn');
+const submitBtn = document.getElementById('submitBtn');
 const statusText = document.getElementById('statusText');
 const hintText = document.getElementById('hintText');
 const resultPanel = document.getElementById('resultPanel');
@@ -9,105 +12,35 @@ const historyList = document.getElementById('historyList');
 
 const CONFIG = {
   blocks: 3,
-  trialsPerBlock: 20,
-  fixationMs: 300,
-  stimulusMs: 150,
-  responseMs: 1200,
-  gaborSize: 220,
-  spatialFrequency: 0.04,
-  sigma: 50,
-  startContrast: 0.65,
-  minContrast: 0.05,
-  maxContrast: 1,
-  contrastStep: 0.05,
+  trialsPerBlock: 12,
+  responseMs: 15000,
+  optionsCount: 14,
+  optionSize: 86,
+  optionGapX: 120,
+  optionGapY: 110,
 };
 
-const STORE_KEY = 'gabor-training-history-v1';
+const STORE_KEY = 'gabor-match-training-history-v3';
+const ORIENTATIONS = [-60, -30, 0, 30, 60];
+const FREQUENCIES = [0.028, 0.04, 0.052];
 
 const game = {
   running: false,
   block: 0,
   trial: 0,
-  expectedKey: null,
-  trialStart: 0,
   awaitingResponse: false,
+  trialStart: 0,
   timeoutId: null,
   sessionTrials: [],
-  contrast: CONFIG.startContrast,
-  consecutiveCorrect: 0,
-  lastDirection: 0,
-  reversals: [],
+  optionHitboxes: [],
+  selectedIndices: new Set(),
+  answerIndices: new Set(),
+  currentTarget: null,
+  currentOptions: [],
 };
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function clearCanvas() {
-  ctx.fillStyle = '#9ca3af';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-function drawFixation() {
-  clearCanvas();
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-
-  ctx.strokeStyle = '#111827';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(cx - 15, cy);
-  ctx.lineTo(cx + 15, cy);
-  ctx.moveTo(cx, cy - 15);
-  ctx.lineTo(cx, cy + 15);
-  ctx.stroke();
-}
-
-function drawGabor({ contrast, angleDeg }) {
-  clearCanvas();
-
-  const size = CONFIG.gaborSize;
-  const half = Math.floor(size / 2);
-  const imageData = ctx.createImageData(size, size);
-
-  const theta = (angleDeg * Math.PI) / 180;
-  const cosT = Math.cos(theta);
-  const sinT = Math.sin(theta);
-  const sigma2 = CONFIG.sigma * CONFIG.sigma;
-
-  for (let y = -half; y < half; y += 1) {
-    for (let x = -half; x < half; x += 1) {
-      const xr = x * cosT + y * sinT;
-      const yr = -x * sinT + y * cosT;
-
-      const gaussian = Math.exp(-(xr * xr + yr * yr) / (2 * sigma2));
-      const sinusoid = Math.cos(2 * Math.PI * CONFIG.spatialFrequency * xr);
-
-      const luminance = 0.5 + 0.5 * contrast * gaussian * sinusoid;
-      const gray = Math.round(clamp(luminance, 0, 1) * 255);
-
-      const px = x + half;
-      const py = y + half;
-      const idx = (py * size + px) * 4;
-
-      imageData.data[idx] = gray;
-      imageData.data[idx + 1] = gray;
-      imageData.data[idx + 2] = gray;
-      imageData.data[idx + 3] = 255;
-    }
-  }
-
-  const offsetX = (canvas.width - size) / 2;
-  const offsetY = (canvas.height - size) / 2;
-  ctx.putImageData(imageData, offsetX, offsetY);
-}
-
-function formatMs(value) {
-  return Number.isFinite(value) ? `${Math.round(value)} ms` : '-';
 }
 
 function setStatus(text, hint = '') {
@@ -115,43 +48,216 @@ function setStatus(text, hint = '') {
   hintText.textContent = hint;
 }
 
-function updateStaircase(correct) {
-  const previousDirection = game.lastDirection;
-
-  if (correct) {
-    game.consecutiveCorrect += 1;
-    if (game.consecutiveCorrect >= 2) {
-      game.contrast = clamp(
-        game.contrast - CONFIG.contrastStep,
-        CONFIG.minContrast,
-        CONFIG.maxContrast,
-      );
-      game.consecutiveCorrect = 0;
-      game.lastDirection = -1;
-    }
-  } else {
-    game.consecutiveCorrect = 0;
-    game.contrast = clamp(
-      game.contrast + CONFIG.contrastStep,
-      CONFIG.minContrast,
-      CONFIG.maxContrast,
-    );
-    game.lastDirection = 1;
-  }
-
-  if (previousDirection !== 0 && previousDirection !== game.lastDirection) {
-    game.reversals.push(game.contrast);
-  }
+function clearCanvas(ctx, canvas) {
+  ctx.fillStyle = '#9ca3af';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-function getThresholdEstimate() {
-  if (game.reversals.length < 4) {
-    return game.contrast;
+function drawGaborPatch(ctx, cx, cy, size, patch, selected = false) {
+  const half = Math.floor(size / 2);
+  const imageData = ctx.createImageData(size, size);
+  const theta = (patch.orientation * Math.PI) / 180;
+  const cosT = Math.cos(theta);
+  const sinT = Math.sin(theta);
+  const sigma = size * 0.26;
+  const sigma2 = sigma * sigma;
+  const contrast = 0.9;
+
+  for (let y = -half; y < half; y += 1) {
+    for (let x = -half; x < half; x += 1) {
+      const xr = x * cosT + y * sinT;
+      const yr = -x * sinT + y * cosT;
+      const gaussian = Math.exp(-(xr * xr + yr * yr) / (2 * sigma2));
+      const sinusoid = Math.cos(2 * Math.PI * patch.frequency * xr);
+      const luminance = 0.5 + 0.5 * contrast * gaussian * sinusoid;
+      const gray = Math.max(0, Math.min(255, Math.round(luminance * 255)));
+
+      const px = x + half;
+      const py = y + half;
+      const idx = (py * size + px) * 4;
+      imageData.data[idx] = gray;
+      imageData.data[idx + 1] = gray;
+      imageData.data[idx + 2] = gray;
+      imageData.data[idx + 3] = 255;
+    }
   }
 
-  const tail = game.reversals.slice(-6);
-  const avg = tail.reduce((sum, value) => sum + value, 0) / tail.length;
-  return avg;
+  const drawX = Math.round(cx - half);
+  const drawY = Math.round(cy - half);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, half + 1, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.putImageData(imageData, drawX, drawY);
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, half + 1.5, 0, Math.PI * 2);
+  ctx.lineWidth = selected ? 5 : 3;
+  ctx.strokeStyle = selected ? '#22c55e' : '#1f2937';
+  ctx.stroke();
+}
+
+function patchEquals(a, b) {
+  return a.orientation === b.orientation && a.frequency === b.frequency;
+}
+
+function randomFrom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomPatch() {
+  return {
+    orientation: randomFrom(ORIENTATIONS),
+    frequency: randomFrom(FREQUENCIES),
+  };
+}
+
+function generateTrialPatches() {
+  const target = randomPatch();
+  const options = [];
+  const matchingCount = randomInt(2, 4);
+
+  for (let i = 0; i < matchingCount; i += 1) {
+    options.push({ ...target });
+  }
+
+  while (options.length < CONFIG.optionsCount) {
+    const candidate = randomPatch();
+    if (!patchEquals(candidate, target)) {
+      options.push(candidate);
+    }
+  }
+
+  for (let i = options.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+
+  const answerIndices = new Set();
+  options.forEach((option, index) => {
+    if (patchEquals(option, target)) {
+      answerIndices.add(index);
+    }
+  });
+
+  return { target, options, answerIndices };
+}
+
+function renderTarget() {
+  clearCanvas(targetCtx, targetCanvas);
+  if (!game.currentTarget) {
+    return;
+  }
+  drawGaborPatch(targetCtx, targetCanvas.width / 2, targetCanvas.height / 2, 124, game.currentTarget);
+}
+
+function renderOptions() {
+  clearCanvas(optionsCtx, optionsCanvas);
+  game.optionHitboxes = [];
+
+  const cols = 4;
+  const startX = 90;
+  const startY = 72;
+
+  game.currentOptions.forEach((option, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = startX + col * CONFIG.optionGapX;
+    const y = startY + row * CONFIG.optionGapY;
+    const selected = game.selectedIndices.has(index);
+
+    drawGaborPatch(optionsCtx, x, y, CONFIG.optionSize, option, selected);
+
+    game.optionHitboxes.push({
+      index,
+      x,
+      y,
+      radius: CONFIG.optionSize / 2 + 8,
+    });
+  });
+}
+
+function getCanvasPoint(event, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  };
+}
+
+function toggleOptionAt(event) {
+  if (!game.running || !game.awaitingResponse) {
+    return;
+  }
+
+  const point = getCanvasPoint(event, optionsCanvas);
+  const hit = game.optionHitboxes.find((item) => {
+    const dx = point.x - item.x;
+    const dy = point.y - item.y;
+    return dx * dx + dy * dy <= item.radius * item.radius;
+  });
+
+  if (!hit) {
+    return;
+  }
+
+  if (game.selectedIndices.has(hit.index)) {
+    game.selectedIndices.delete(hit.index);
+  } else {
+    game.selectedIndices.add(hit.index);
+  }
+
+  renderOptions();
+}
+
+function setsEqual(a, b) {
+  if (a.size !== b.size) {
+    return false;
+  }
+  return [...a].every((value) => b.has(value));
+}
+
+function submitCurrentTrial(reason = 'answered') {
+  if (!game.awaitingResponse) {
+    return;
+  }
+
+  game.awaitingResponse = false;
+  clearTimeout(game.timeoutId);
+
+  const rt = reason === 'timeout' ? null : Math.round(performance.now() - game.trialStart);
+  const selectedSorted = [...game.selectedIndices].sort((a, b) => a - b);
+  const answerSorted = [...game.answerIndices].sort((a, b) => a - b);
+  const correct = reason !== 'timeout' && setsEqual(game.selectedIndices, game.answerIndices);
+
+  game.sessionTrials.push({
+    block: game.block,
+    trial: game.trial,
+    correct,
+    rt,
+    selected: selectedSorted,
+    answer: answerSorted,
+    target: { ...game.currentTarget },
+  });
+
+  const trialTitle = `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`;
+  if (reason === 'timeout') {
+    setStatus(trialTitle, '⏱️ 超時，記為錯誤');
+  } else if (correct) {
+    setStatus(trialTitle, `✅ 正確（RT ${rt} ms）`);
+  } else {
+    setStatus(trialTitle, `❌ 錯誤（RT ${rt} ms）`);
+  }
+
+  submitBtn.disabled = true;
 }
 
 function getHistory() {
@@ -165,8 +271,7 @@ function getHistory() {
 function saveSession(summary) {
   const history = getHistory();
   history.unshift(summary);
-  const trimmed = history.slice(0, 20);
-  localStorage.setItem(STORE_KEY, JSON.stringify(trimmed));
+  localStorage.setItem(STORE_KEY, JSON.stringify(history.slice(0, 20)));
 }
 
 function renderHistory() {
@@ -182,94 +287,9 @@ function renderHistory() {
 
   history.slice(0, 10).forEach((session) => {
     const li = document.createElement('li');
-    li.textContent = `${session.date}｜正確率 ${session.accuracy}%｜平均 RT ${session.avgRt}｜threshold ${session.threshold}`;
+    li.textContent = `${session.date}｜正確率 ${session.accuracy}%｜平均 RT ${session.avgRt}`;
     historyList.appendChild(li);
   });
-}
-
-function handleKeydown(event) {
-  if (!game.running || !game.awaitingResponse) {
-    return;
-  }
-
-  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-    return;
-  }
-
-  game.awaitingResponse = false;
-  clearTimeout(game.timeoutId);
-
-  const rt = performance.now() - game.trialStart;
-  const correct = event.key === game.expectedKey;
-  updateStaircase(correct);
-
-  game.sessionTrials.push({
-    block: game.block,
-    trial: game.trial,
-    expectedKey: game.expectedKey,
-    response: event.key,
-    correct,
-    rt: Math.round(rt),
-    contrast: Number(game.contrast.toFixed(3)),
-  });
-
-  setStatus(
-    `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`,
-    correct ? `✅ 正確（RT ${Math.round(rt)} ms）` : `❌ 錯誤（RT ${Math.round(rt)} ms）`,
-  );
-}
-
-async function runTrial() {
-  game.trial += 1;
-  setStatus(`Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`, '請注視中央 +');
-
-  drawFixation();
-  await sleep(CONFIG.fixationMs);
-
-  const leftTilt = Math.random() < 0.5;
-  const angle = leftTilt ? -15 : 15;
-  game.expectedKey = leftTilt ? 'ArrowLeft' : 'ArrowRight';
-
-  drawGabor({ contrast: game.contrast, angleDeg: angle });
-  await sleep(CONFIG.stimulusMs);
-
-  drawFixation();
-
-  game.awaitingResponse = true;
-  game.trialStart = performance.now();
-
-  const result = await new Promise((resolve) => {
-    game.timeoutId = setTimeout(() => {
-      if (!game.awaitingResponse) {
-        resolve('answered');
-        return;
-      }
-
-      game.awaitingResponse = false;
-      updateStaircase(false);
-      game.sessionTrials.push({
-        block: game.block,
-        trial: game.trial,
-        expectedKey: game.expectedKey,
-        response: 'timeout',
-        correct: false,
-        rt: null,
-        contrast: Number(game.contrast.toFixed(3)),
-      });
-      setStatus(`Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`, '⏱️ 超時');
-      resolve('timeout');
-    }, CONFIG.responseMs);
-
-    const poll = setInterval(() => {
-      if (!game.awaitingResponse) {
-        clearInterval(poll);
-        resolve('answered');
-      }
-    }, 16);
-  });
-
-  await sleep(250);
-  return result;
 }
 
 function summarizeSession() {
@@ -280,32 +300,25 @@ function summarizeSession() {
   const rts = game.sessionTrials
     .filter((trial) => Number.isFinite(trial.rt))
     .map((trial) => trial.rt);
-  const avgRtValue = rts.length > 0 ? rts.reduce((sum, v) => sum + v, 0) / rts.length : NaN;
-
-  const threshold = Number(getThresholdEstimate().toFixed(3));
+  const avgRtValue = rts.length > 0 ? Math.round(rts.reduce((sum, value) => sum + value, 0) / rts.length) : null;
 
   return {
     date: new Date().toLocaleString('zh-TW', { hour12: false }),
     total,
     correct: correctCount,
     accuracy,
-    avgRt: formatMs(avgRtValue),
-    threshold,
+    avgRt: avgRtValue === null ? '-' : `${avgRtValue} ms`,
   };
 }
 
 function showResult(summary) {
   resultList.innerHTML = '';
-
-  const rows = [
+  [
     `題數：${summary.total}`,
     `正確：${summary.correct}`,
     `正確率：${summary.accuracy}%`,
     `平均反應時間：${summary.avgRt}`,
-    `threshold（估計）：${summary.threshold} 對比`,
-  ];
-
-  rows.forEach((text) => {
+  ].forEach((text) => {
     const li = document.createElement('li');
     li.textContent = text;
     resultList.appendChild(li);
@@ -314,15 +327,49 @@ function showResult(summary) {
   resultPanel.hidden = false;
 }
 
+async function runTrial() {
+  game.trial += 1;
+  game.selectedIndices = new Set();
+
+  const generated = generateTrialPatches();
+  game.currentTarget = generated.target;
+  game.currentOptions = generated.options;
+  game.answerIndices = generated.answerIndices;
+
+  renderTarget();
+  renderOptions();
+
+  setStatus(
+    `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`,
+    `請選出 ${game.answerIndices.size} 個與目標 Gabor Patch 相同的刺激`,
+  );
+
+  game.awaitingResponse = true;
+  game.trialStart = performance.now();
+  submitBtn.disabled = false;
+
+  await new Promise((resolve) => {
+    game.timeoutId = setTimeout(() => {
+      submitCurrentTrial('timeout');
+      resolve();
+    }, CONFIG.responseMs);
+
+    const poll = setInterval(() => {
+      if (!game.awaitingResponse) {
+        clearInterval(poll);
+        resolve();
+      }
+    }, 16);
+  });
+
+  await sleep(300);
+}
+
 async function runSession() {
   game.running = true;
   game.block = 0;
   game.trial = 0;
   game.sessionTrials = [];
-  game.contrast = CONFIG.startContrast;
-  game.consecutiveCorrect = 0;
-  game.lastDirection = 0;
-  game.reversals = [];
 
   startBtn.disabled = true;
   resultPanel.hidden = true;
@@ -336,21 +383,24 @@ async function runSession() {
     }
 
     if (block < CONFIG.blocks) {
-      setStatus(`完成 Block ${block}/${CONFIG.blocks}`, '休息 3 秒後繼續');
-      await sleep(3000);
+      setStatus(`完成 Block ${block}/${CONFIG.blocks}`, '休息 2 秒後繼續');
+      await sleep(2000);
     }
   }
 
   game.running = false;
   startBtn.disabled = false;
-  clearCanvas();
+  submitBtn.disabled = true;
+
+  clearCanvas(targetCtx, targetCanvas);
+  clearCanvas(optionsCtx, optionsCanvas);
 
   const summary = summarizeSession();
   showResult(summary);
   saveSession(summary);
   renderHistory();
 
-  setStatus('訓練完成 🎉', `正確率 ${summary.accuracy}% · threshold ${summary.threshold}`);
+  setStatus('訓練完成 🎉', `正確率 ${summary.accuracy}% · 平均 RT ${summary.avgRt}`);
 }
 
 startBtn.addEventListener('click', () => {
@@ -360,7 +410,18 @@ startBtn.addEventListener('click', () => {
   runSession();
 });
 
-document.addEventListener('keydown', handleKeydown);
+submitBtn.addEventListener('click', () => {
+  submitCurrentTrial('answered');
+});
 
-clearCanvas();
+optionsCanvas.addEventListener('click', toggleOptionAt);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    submitCurrentTrial('answered');
+  }
+});
+
+clearCanvas(targetCtx, targetCanvas);
+clearCanvas(optionsCtx, optionsCanvas);
 renderHistory();
