@@ -100,8 +100,28 @@ function updateTargetCount() {
 
 async function showCelebrationPopup() {
   celebrationPopup.hidden = false;
-  await sleep(1000);
-  celebrationPopup.hidden = true;
+  await new Promise((resolve) => {
+    let settled = false;
+    let timerId;
+
+    const closePopup = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      celebrationPopup.hidden = true;
+      celebrationPopup.removeEventListener('pointerdown', handlePointerDown);
+      clearTimeout(timerId);
+      resolve();
+    };
+
+    const handlePointerDown = () => {
+      closePopup();
+    };
+
+    celebrationPopup.addEventListener('pointerdown', handlePointerDown);
+    timerId = setTimeout(closePopup, 1000);
+  });
 }
 
 function clearCanvas(ctx, canvas) {
@@ -533,6 +553,7 @@ function initApp() {
 
   clearCanvas(targetCtx, targetCanvas);
   clearCanvas(optionsCtx, optionsCanvas);
+  celebrationPopup.hidden = true;
   updateTargetCount();
   updateProgress();
   renderHistory();
