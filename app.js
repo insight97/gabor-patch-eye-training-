@@ -41,6 +41,8 @@ const game = {
   currentTarget: null,
   currentOptions: [],
   requiredMatchCount: null,
+  trialClickCount: 0,
+  trialMistakeClickCount: 0,
 };
 
 function setFatalStatus(message) {
@@ -324,6 +326,15 @@ function toggleOptionAt(event) {
     return;
   }
 
+  const wasSelected = game.selectedIndices.has(hit.index);
+  const isAnswer = game.answerIndices.has(hit.index);
+  const isMistakeClick = (!wasSelected && !isAnswer) || (wasSelected && isAnswer);
+
+  game.trialClickCount += 1;
+  if (isMistakeClick) {
+    game.trialMistakeClickCount += 1;
+  }
+
   if (game.selectedIndices.has(hit.index)) {
     game.selectedIndices.delete(hit.index);
   } else {
@@ -364,6 +375,8 @@ function submitCurrentTrial() {
     selected: selectedSorted,
     answer: answerSorted,
     target: { ...game.currentTarget },
+    clickCount: game.trialClickCount,
+    mistakeClicks: game.trialMistakeClickCount,
   });
 
   const trialTitle = `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`;
@@ -411,7 +424,11 @@ function renderHistory() {
 function summarizeSession() {
   const total = game.sessionTrials.length;
   const correctCount = game.sessionTrials.filter((trial) => trial.correct).length;
-  const accuracy = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+  const totalClicks = game.sessionTrials.reduce((sum, trial) => sum + (trial.clickCount || 0), 0);
+  const totalMistakeClicks = game.sessionTrials.reduce((sum, trial) => sum + (trial.mistakeClicks || 0), 0);
+  const accuracy =
+    totalClicks > 0 ? Math.round(((totalClicks - totalMistakeClicks) / totalClicks) * 100) : 0;
+  const completionRate = total > 0 ? Math.round((correctCount / total) * 100) : 0;
 
   const rts = game.sessionTrials
     .filter((trial) => Number.isFinite(trial.rt))
@@ -425,9 +442,12 @@ function summarizeSession() {
     total,
     correct: correctCount,
     accuracy,
+    completionRate,
     avgRt: avgRtValue === null ? '-' : `${avgRtValue} ms`,
     speedScore,
     finalScore,
+    totalClicks,
+    totalMistakeClicks,
   };
 }
 
@@ -436,7 +456,9 @@ function showResult(summary) {
   [
     `題數：${summary.total}`,
     `正確：${summary.correct}`,
-    `正確率：${summary.accuracy}%`,
+    `完成率：${summary.completionRate}%`,
+    `操作正確率：${summary.accuracy}%（點錯再收回會扣分）`,
+    `誤點次數：${summary.totalMistakeClicks} / ${summary.totalClicks} 次操作`,
     `平均反應時間：${summary.avgRt}`,
     `速度分數：${summary.speedScore}`,
     `總分（正確率 70% + 速度 30%）：${summary.finalScore}`,
@@ -452,6 +474,8 @@ function showResult(summary) {
 async function runTrial() {
   game.trial += 1;
   game.selectedIndices = new Set();
+  game.trialClickCount = 0;
+  game.trialMistakeClickCount = 0;
 
   const generated = generateTrialPatches();
   game.currentTarget = generated.target;
