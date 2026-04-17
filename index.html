@@ -12,7 +12,6 @@
       <p class="subtitle">上方會顯示目標 Gabor Patch，下方會出現十幾個 Gabor Patch，請選出所有與目標完全相同的刺激。</p>
 
       <section class="panel controls">
-        <button id="startBtn">開始訓練（1 Block × 10 Trials）</button>
         <p>操作：點選下方符號可切換選取，全部找對後會自動進入下一題。</p>
         <p>每題不限時，但會記錄反應時間，並納入分數計算。</p>
         <p class="note">訓練用途，非醫療診斷或治療。</p>
@@ -30,6 +29,7 @@
           <div id="targetCountText" class="target-count">相同數量：尚未開始</div>
         </div>
         <canvas id="targetCanvas" width="140" height="140" aria-label="target symbol"></canvas>
+        <button id="startBtn" class="progress-start-btn">開始訓練（1 Block × 10 Trials）</button>
         <div class="progress-wrap" aria-label="session progress">
           <div class="progress-meta">
             <span>進度</span>
@@ -40,6 +40,9 @@
           </div>
         </div>
         <div id="candidateLabel" class="stimulus-label">候選符號（尚未開始）</div>
+        <div id="celebrationPopup" class="celebration-inline" hidden role="status" aria-live="polite">
+          <div class="celebration-card">🎉 恭喜答對！</div>
+        </div>
         <canvas id="optionsCanvas" width="720" height="500" aria-label="candidate symbols"></canvas>
       </section>
 
@@ -53,9 +56,6 @@
         <ul id="historyList"></ul>
       </section>
     </main>
-    <div id="celebrationPopup" class="celebration-popup" hidden role="status" aria-live="polite">
-      <div class="celebration-card">🎉 恭喜答對！</div>
-    </div>
 
     <script src="app.js" defer></script>
   </body>
