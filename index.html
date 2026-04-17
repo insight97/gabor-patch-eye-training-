@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gabor Patch Eye Training MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Gabor Patch Eye Training</h1>
+      <p class="subtitle">最簡版 MVP：方向辨識 + 自適應難度 + 本機紀錄</p>
+
+      <section class="panel controls">
+        <button id="startBtn">開始訓練（3 Blocks × 20 Trials）</button>
+        <p>操作：看到傾斜條紋後按 <kbd>←</kbd> 或 <kbd>→</kbd></p>
+        <p class="note">訓練用途，非醫療診斷或治療。</p>
+      </section>
+
+      <section class="panel status">
+        <div id="statusText">尚未開始</div>
+        <div id="hintText">準備好後按開始</div>
+      </section>
+
+      <section class="panel canvas-wrap">
+        <canvas id="stimulusCanvas" width="360" height="360" aria-label="gabor stimulus"></canvas>
+      </section>
+
+      <section class="panel" id="resultPanel" hidden>
+        <h2>本次結果</h2>
+        <ul id="resultList"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>近期紀錄（本機）</h2>
+        <ul id="historyList"></ul>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
