@@ -7,6 +7,7 @@ let statusText;
 let hintText;
 let feedbackText;
 let targetCountText;
+let candidateLabel;
 let progressText;
 let progressFill;
 let celebrationPopup;
@@ -88,6 +89,14 @@ function updateProgress() {
   progressText.textContent = `${completedTrials} / ${totalTrials}`;
   const percentage = totalTrials === 0 ? 0 : Math.min(100, Math.round((completedTrials / totalTrials) * 100));
   progressFill.style.width = `${percentage}%`;
+}
+
+function updateCandidateLabel() {
+  if (!game.answerIndices || game.answerIndices.size === 0) {
+    candidateLabel.textContent = '候選符號（請選出 - 個相同）';
+    return;
+  }
+  candidateLabel.textContent = `候選符號（請選出 ${game.answerIndices.size} 個相同）`;
 }
 
 function updateTargetCount() {
@@ -443,6 +452,7 @@ async function runTrial() {
   game.currentOptions = generated.options;
   game.answerIndices = generated.answerIndices;
   updateTargetCount();
+  updateCandidateLabel();
   updateProgress();
 
   renderTarget();
@@ -507,6 +517,7 @@ async function runSession() {
   setStatus('訓練完成 🎉', `正確率 ${summary.accuracy}% · 平均 RT ${summary.avgRt}`);
   setFeedback(`🏁 本回合總分：${summary.finalScore}`, 'success');
   targetCountText.textContent = '相同數量：-';
+  updateCandidateLabel();
   updateProgress();
 }
 
@@ -518,6 +529,7 @@ function initApp() {
   hintText = document.getElementById('hintText');
   feedbackText = document.getElementById('feedbackText');
   targetCountText = document.getElementById('targetCountText');
+  candidateLabel = document.getElementById('candidateLabel');
   progressText = document.getElementById('progressText');
   progressFill = document.getElementById('progressFill');
   celebrationPopup = document.getElementById('celebrationPopup');
@@ -533,6 +545,7 @@ function initApp() {
     !hintText ||
     !feedbackText ||
     !targetCountText ||
+    !candidateLabel ||
     !progressText ||
     !progressFill ||
     !celebrationPopup ||
@@ -572,6 +585,7 @@ function initApp() {
   celebrationPopup.classList.remove('is-visible');
   celebrationPopup.hidden = true;
   updateTargetCount();
+  updateCandidateLabel();
   updateProgress();
   renderHistory();
 }

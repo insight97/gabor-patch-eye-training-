@@ -173,7 +173,7 @@ canvas {
 }
 
 #targetCanvas {
-  width: min(200px, 100%);
+  width: min(140px, 100%);
   height: auto;
 }
 
