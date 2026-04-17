@@ -6,7 +6,6 @@ let startBtn;
 let statusText;
 let hintText;
 let feedbackText;
-let targetCountText;
 let candidateLabel;
 let progressText;
 let progressFill;
@@ -116,16 +115,7 @@ function updateCandidateLabel() {
   candidateLabel.textContent = `候選符號（請選出 ${game.requiredMatchCount} 個相同）`;
 }
 
-function updateTargetCount() {
-  if (!Number.isInteger(game.requiredMatchCount) || game.requiredMatchCount <= 0) {
-    targetCountText.textContent = '相同數量：尚未開始';
-    return;
-  }
-  targetCountText.textContent = `相同數量：${game.requiredMatchCount}`;
-}
-
 async function showCelebrationPopup() {
-  celebrationPopup.classList.add('is-visible');
   celebrationPopup.hidden = false;
 
   await new Promise((resolve) => {
@@ -138,7 +128,6 @@ async function showCelebrationPopup() {
         return;
       }
       settled = true;
-      celebrationPopup.classList.remove('is-visible');
       celebrationPopup.hidden = true;
       celebrationPopup.removeEventListener('pointerdown', handlePointerDown);
       celebrationPopup.removeEventListener('click', handlePointerDown);
@@ -469,7 +458,6 @@ async function runTrial() {
   game.currentOptions = generated.options;
   game.answerIndices = generated.answerIndices;
   game.requiredMatchCount = generated.matchingCount;
-  updateTargetCount();
   updateCandidateLabel();
   updateProgress();
 
@@ -538,7 +526,6 @@ async function runSession() {
 
   setStatus('訓練完成 🎉', `正確率 ${summary.accuracy}% · 平均 RT ${summary.avgRt}`);
   setFeedback(`🏁 本回合總分：${summary.finalScore}`, 'success');
-  targetCountText.textContent = '相同數量：尚未開始';
   updateCandidateLabel();
   updateProgress();
 }
@@ -550,7 +537,6 @@ function initApp() {
   statusText = document.getElementById('statusText');
   hintText = document.getElementById('hintText');
   feedbackText = document.getElementById('feedbackText');
-  targetCountText = document.getElementById('targetCountText');
   candidateLabel = document.getElementById('candidateLabel');
   progressText = document.getElementById('progressText');
   progressFill = document.getElementById('progressFill');
@@ -567,7 +553,6 @@ function initApp() {
     !statusText ||
     !hintText ||
     !feedbackText ||
-    !targetCountText ||
     !candidateLabel ||
     !progressText ||
     !progressFill ||
@@ -606,9 +591,7 @@ function initApp() {
 
   clearCanvas(targetCtx, targetCanvas);
   clearCanvas(optionsCtx, optionsCanvas);
-  celebrationPopup.classList.remove('is-visible');
   celebrationPopup.hidden = true;
-  updateTargetCount();
   updateCandidateLabel();
   updateProgress();
   updateSessionControls();

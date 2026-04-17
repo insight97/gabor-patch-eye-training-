@@ -134,11 +134,6 @@ button:disabled {
   color: #d1d5db;
 }
 
-.target-count {
-  font-size: 14px;
-  color: #cbd5e1;
-}
-
 .progress-wrap {
   width: min(200px, 100%);
 }
@@ -187,20 +182,24 @@ canvas {
   max-width: 720px;
 }
 
+.options-stage {
+  width: 100%;
+  max-width: 720px;
+  position: relative;
+}
+
 ul {
   margin: 8px 0 0;
   padding-left: 18px;
 }
 
-.celebration-inline {
-  width: 100%;
-  display: none;
-  justify-content: center;
+.celebration-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
   pointer-events: none;
-}
-
-.celebration-inline.is-visible {
-  display: flex;
+  z-index: 2;
 }
 
 .celebration-card {

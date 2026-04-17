@@ -26,10 +26,9 @@
       <section class="panel stimulus-wrap">
         <div class="stimulus-header">
           <div class="stimulus-label">目標符號</div>
-          <div id="targetCountText" class="target-count">相同數量：尚未開始</div>
         </div>
         <canvas id="targetCanvas" width="140" height="140" aria-label="target symbol"></canvas>
-        <button id="startBtn" class="progress-start-btn">開始訓練（1 Block × 10 Trials）</button>
+        <button id="startBtn" class="progress-start-btn">開始訓練</button>
         <div class="progress-wrap" aria-label="session progress">
           <div class="progress-meta">
             <span>進度</span>
@@ -40,10 +39,12 @@
           </div>
         </div>
         <div id="candidateLabel" class="stimulus-label">候選符號（尚未開始）</div>
-        <div id="celebrationPopup" class="celebration-inline" hidden role="status" aria-live="polite">
-          <div class="celebration-card">🎉 恭喜答對！</div>
+        <div class="options-stage">
+          <canvas id="optionsCanvas" width="720" height="500" aria-label="candidate symbols"></canvas>
+          <div id="celebrationPopup" class="celebration-overlay" hidden role="status" aria-live="polite">
+            <div class="celebration-card">🎉 恭喜答對！</div>
+          </div>
         </div>
-        <canvas id="optionsCanvas" width="720" height="500" aria-label="candidate symbols"></canvas>
       </section>
 
       <section class="panel" id="resultPanel" hidden>
