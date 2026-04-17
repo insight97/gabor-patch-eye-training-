@@ -3,7 +3,6 @@ let targetCtx;
 let optionsCanvas;
 let optionsCtx;
 let startBtn;
-let submitBtn;
 let statusText;
 let hintText;
 let resultPanel;
@@ -43,7 +42,6 @@ function setFatalStatus(message) {
   const statusNode = document.getElementById('statusText');
   const hintNode = document.getElementById('hintText');
   const startNode = document.getElementById('startBtn');
-  const submitNode = document.getElementById('submitBtn');
 
   if (statusNode) {
     statusNode.textContent = message;
@@ -53,9 +51,6 @@ function setFatalStatus(message) {
   }
   if (startNode) {
     startNode.disabled = true;
-  }
-  if (submitNode) {
-    submitNode.disabled = true;
   }
 }
 
@@ -106,17 +101,22 @@ function drawGaborPatch(ctx, cx, cy, size, patch, selected = false) {
   const drawY = Math.round(cy - half);
 
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, half + 1, 0, Math.PI * 2);
-  ctx.clip();
   ctx.putImageData(imageData, drawX, drawY);
-  ctx.restore();
 
-  ctx.beginPath();
-  ctx.arc(cx, cy, half + 1.5, 0, Math.PI * 2);
-  ctx.lineWidth = selected ? 5 : 3;
-  ctx.strokeStyle = selected ? '#22c55e' : '#1f2937';
-  ctx.stroke();
+  if (!selected) {
+    ctx.restore();
+    return;
+  }
+
+  const outlinePadding = 6;
+  const outlineSize = size + outlinePadding * 2;
+  const outlineX = Math.round(cx - outlineSize / 2);
+  const outlineY = Math.round(cy - outlineSize / 2);
+
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#22c55e';
+  ctx.strokeRect(outlineX, outlineY, outlineSize, outlineSize);
+  ctx.restore();
 }
 
 function patchEquals(a, b) {
@@ -182,8 +182,11 @@ function renderOptions() {
   game.optionHitboxes = [];
 
   const cols = 4;
-  const startX = 90;
-  const startY = 72;
+  const rows = Math.ceil(game.currentOptions.length / cols);
+  const gridWidth = (cols - 1) * CONFIG.optionGapX;
+  const gridHeight = (rows - 1) * CONFIG.optionGapY;
+  const startX = (optionsCanvas.width - gridWidth) / 2;
+  const startY = (optionsCanvas.height - gridHeight) / 2;
 
   game.currentOptions.forEach((option, index) => {
     const col = index % cols;
@@ -236,6 +239,10 @@ function toggleOptionAt(event) {
   }
 
   renderOptions();
+
+  if (setsEqual(game.selectedIndices, game.answerIndices)) {
+    submitCurrentTrial('answered');
+  }
 }
 
 function setsEqual(a, b) {
@@ -277,7 +284,6 @@ function submitCurrentTrial(reason = 'answered') {
     setStatus(trialTitle, `❌ 錯誤（RT ${rt} ms）`);
   }
 
-  submitBtn.disabled = true;
 }
 
 function getHistory() {
@@ -366,7 +372,6 @@ async function runTrial() {
 
   game.awaitingResponse = true;
   game.trialStart = performance.now();
-  submitBtn.disabled = false;
 
   await new Promise((resolve) => {
     game.timeoutId = setTimeout(() => {
@@ -410,7 +415,6 @@ async function runSession() {
 
   game.running = false;
   startBtn.disabled = false;
-  submitBtn.disabled = true;
 
   clearCanvas(targetCtx, targetCanvas);
   clearCanvas(optionsCtx, optionsCanvas);
@@ -427,7 +431,6 @@ function initApp() {
   targetCanvas = document.getElementById('targetCanvas');
   optionsCanvas = document.getElementById('optionsCanvas');
   startBtn = document.getElementById('startBtn');
-  submitBtn = document.getElementById('submitBtn');
   statusText = document.getElementById('statusText');
   hintText = document.getElementById('hintText');
   resultPanel = document.getElementById('resultPanel');
@@ -438,7 +441,6 @@ function initApp() {
     !targetCanvas ||
     !optionsCanvas ||
     !startBtn ||
-    !submitBtn ||
     !statusText ||
     !hintText ||
     !resultPanel ||
@@ -463,10 +465,6 @@ function initApp() {
     runSession();
   });
 
-  submitBtn.addEventListener('click', () => {
-    submitCurrentTrial('answered');
-  });
-
   optionsCanvas.addEventListener('click', toggleOptionAt);
   optionsCanvas.addEventListener('touchstart', (event) => {
     const [touch] = event.changedTouches;
@@ -474,12 +472,6 @@ function initApp() {
       return;
     }
     toggleOptionAt(touch);
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      submitCurrentTrial('answered');
-    }
   });
 
   clearCanvas(targetCtx, targetCanvas);
