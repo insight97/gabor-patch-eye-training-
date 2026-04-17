@@ -3,17 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gabor Patch Eye Training MVP</title>
+    <title>Gabor Patch Match Training MVP</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="container">
-      <h1>Gabor Patch Eye Training</h1>
-      <p class="subtitle">最簡版 MVP：方向辨識 + 自適應難度 + 本機紀錄</p>
+      <h1>Gabor Patch 比對訓練</h1>
+      <p class="subtitle">上方會顯示目標 Gabor Patch，下方會出現十幾個 Gabor Patch，請選出所有與目標完全相同的刺激。</p>
 
       <section class="panel controls">
-        <button id="startBtn">開始訓練（3 Blocks × 20 Trials）</button>
-        <p>操作：看到傾斜條紋後按 <kbd>←</kbd> 或 <kbd>→</kbd></p>
+        <button id="startBtn">開始訓練（3 Blocks × 12 Trials）</button>
+        <button id="submitBtn" disabled>送出本題</button>
+        <p>操作：點選下方符號可切換選取，再按「送出本題」確認答案。</p>
         <p class="note">訓練用途，非醫療診斷或治療。</p>
       </section>
 
@@ -22,8 +23,11 @@
         <div id="hintText">準備好後按開始</div>
       </section>
 
-      <section class="panel canvas-wrap">
-        <canvas id="stimulusCanvas" width="360" height="360" aria-label="gabor stimulus"></canvas>
+      <section class="panel stimulus-wrap">
+        <div class="stimulus-label">目標符號</div>
+        <canvas id="targetCanvas" width="200" height="200" aria-label="target symbol"></canvas>
+        <div class="stimulus-label">候選 Gabor Patch（請選出所有相同）</div>
+        <canvas id="optionsCanvas" width="720" height="360" aria-label="candidate symbols"></canvas>
       </section>
 
       <section class="panel" id="resultPanel" hidden>
