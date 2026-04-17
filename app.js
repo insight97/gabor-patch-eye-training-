@@ -10,6 +10,7 @@ let targetCountText;
 let candidateLabel;
 let progressText;
 let progressFill;
+let progressWrap;
 let celebrationPopup;
 let resultPanel;
 let resultList;
@@ -90,6 +91,21 @@ function updateProgress() {
   progressText.textContent = `${completedTrials} / ${totalTrials}`;
   const percentage = totalTrials === 0 ? 0 : Math.min(100, Math.round((completedTrials / totalTrials) * 100));
   progressFill.style.width = `${percentage}%`;
+}
+
+function updateSessionControls() {
+  if (!startBtn || !progressWrap) {
+    return;
+  }
+
+  if (game.running) {
+    startBtn.hidden = true;
+    progressWrap.hidden = false;
+    return;
+  }
+
+  startBtn.hidden = false;
+  progressWrap.hidden = true;
 }
 
 function updateCandidateLabel() {
@@ -490,6 +506,7 @@ async function runSession() {
 
   startBtn.disabled = true;
   resultPanel.hidden = true;
+  updateSessionControls();
   updateProgress();
 
   for (let block = 1; block <= CONFIG.blocks; block += 1) {
@@ -509,6 +526,7 @@ async function runSession() {
   game.running = false;
   game.requiredMatchCount = null;
   startBtn.disabled = false;
+  updateSessionControls();
 
   clearCanvas(targetCtx, targetCanvas);
   clearCanvas(optionsCtx, optionsCanvas);
@@ -536,6 +554,7 @@ function initApp() {
   candidateLabel = document.getElementById('candidateLabel');
   progressText = document.getElementById('progressText');
   progressFill = document.getElementById('progressFill');
+  progressWrap = document.querySelector('.progress-wrap');
   celebrationPopup = document.getElementById('celebrationPopup');
   resultPanel = document.getElementById('resultPanel');
   resultList = document.getElementById('resultList');
@@ -552,6 +571,7 @@ function initApp() {
     !candidateLabel ||
     !progressText ||
     !progressFill ||
+    !progressWrap ||
     !celebrationPopup ||
     !resultPanel ||
     !resultList ||
@@ -591,6 +611,7 @@ function initApp() {
   updateTargetCount();
   updateCandidateLabel();
   updateProgress();
+  updateSessionControls();
   renderHistory();
 }
 
