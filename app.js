@@ -27,6 +27,36 @@ const CONFIG = {
 const STORE_KEY = 'gabor-match-training-history-v3';
 const ORIENTATIONS = [-60, -30, 0, 30, 60];
 const FREQUENCIES = [0.028, 0.04, 0.052];
+const DIFFICULTY_PROFILES = [
+  {
+    label: '簡單',
+    orientationOffsets: [-60, -30, 30, 60],
+    frequencyOffsets: [-0.024, -0.012, 0.012, 0.024],
+    fastRtThreshold: 2300,
+    slowRtThreshold: 4000,
+  },
+  {
+    label: '普通',
+    orientationOffsets: [-30, -15, 15, 30],
+    frequencyOffsets: [-0.012, -0.006, 0.006, 0.012],
+    fastRtThreshold: 1800,
+    slowRtThreshold: 3300,
+  },
+  {
+    label: '困難',
+    orientationOffsets: [-20, -10, 10, 20],
+    frequencyOffsets: [-0.008, -0.004, 0.004, 0.008],
+    fastRtThreshold: 1500,
+    slowRtThreshold: 2600,
+  },
+  {
+    label: '專家',
+    orientationOffsets: [-12, -6, 6, 12],
+    frequencyOffsets: [-0.005, -0.002, 0.002, 0.005],
+    fastRtThreshold: 1200,
+    slowRtThreshold: 2200,
+  },
+];
 
 const game = {
   running: false,
@@ -43,6 +73,7 @@ const game = {
   requiredMatchCount: null,
   trialClickCount: 0,
   trialMistakeClickCount: 0,
+  difficultyLevel: 1,
 };
 
 function setFatalStatus(message) {
@@ -232,17 +263,52 @@ function randomPatch() {
   };
 }
 
+function getDifficultyProfile() {
+  return DIFFICULTY_PROFILES[Math.max(0, Math.min(DIFFICULTY_PROFILES.length - 1, game.difficultyLevel))];
+}
+
+function clampByRange(value, values) {
+  return Math.max(Math.min(...values), Math.min(Math.max(...values), value));
+}
+
+function createDistractorFromTarget(target, profile) {
+  const useOrientationOnly = Math.random() < 0.5;
+  const orientationShift = randomFrom(profile.orientationOffsets);
+  const frequencyShift = randomFrom(profile.frequencyOffsets);
+  const candidate = {
+    orientation: target.orientation,
+    frequency: target.frequency,
+  };
+
+  if (useOrientationOnly) {
+    candidate.orientation = clampByRange(target.orientation + orientationShift, ORIENTATIONS);
+  } else {
+    candidate.frequency = clampByRange(target.frequency + frequencyShift, FREQUENCIES);
+  }
+
+  if (patchEquals(candidate, target)) {
+    if (useOrientationOnly) {
+      candidate.orientation = randomFrom(ORIENTATIONS.filter((value) => value !== target.orientation));
+    } else {
+      candidate.frequency = randomFrom(FREQUENCIES.filter((value) => value !== target.frequency));
+    }
+  }
+
+  return candidate;
+}
+
 function generateTrialPatches() {
   const target = randomPatch();
   const options = [];
   const matchingCount = randomInt(2, 4);
+  const profile = getDifficultyProfile();
 
   for (let i = 0; i < matchingCount; i += 1) {
     options.push({ ...target });
   }
 
   while (options.length < CONFIG.optionsCount) {
-    const candidate = randomPatch();
+    const candidate = createDistractorFromTarget(target, profile);
     if (!patchEquals(candidate, target)) {
       options.push(candidate);
     }
@@ -260,7 +326,44 @@ function generateTrialPatches() {
     }
   });
 
-  return { target, options, answerIndices, matchingCount };
+  return { target, options, answerIndices, matchingCount, difficultyLabel: profile.label };
+}
+
+function getTrialPerformanceLevel(trialResult) {
+  const clickCount = trialResult.clickCount || 0;
+  const trialAccuracy =
+    clickCount > 0
+      ? Math.round(((clickCount - (trialResult.mistakeClicks || 0)) / clickCount) * 100)
+      : 100;
+  const profile = getDifficultyProfile();
+  const fastAndAccurate =
+    trialResult.correct &&
+    trialAccuracy >= 90 &&
+    trialResult.rt <= profile.fastRtThreshold;
+  const struggling = !trialResult.correct || trialAccuracy < 70 || trialResult.rt >= profile.slowRtThreshold;
+
+  if (fastAndAccurate) {
+    return 'up';
+  }
+  if (struggling) {
+    return 'down';
+  }
+  return 'stay';
+}
+
+function adaptDifficulty(trialResult) {
+  const before = game.difficultyLevel;
+  const performanceLevel = getTrialPerformanceLevel(trialResult);
+  if (performanceLevel === 'up') {
+    game.difficultyLevel = Math.min(DIFFICULTY_PROFILES.length - 1, game.difficultyLevel + 1);
+  } else if (performanceLevel === 'down') {
+    game.difficultyLevel = Math.max(0, game.difficultyLevel - 1);
+  }
+  return {
+    beforeLabel: DIFFICULTY_PROFILES[before].label,
+    afterLabel: DIFFICULTY_PROFILES[game.difficultyLevel].label,
+    changed: before !== game.difficultyLevel,
+  };
 }
 
 function renderTarget() {
@@ -367,7 +470,7 @@ function submitCurrentTrial() {
   const answerSorted = [...game.answerIndices].sort((a, b) => a - b);
   const correct = setsEqual(game.selectedIndices, game.answerIndices);
 
-  game.sessionTrials.push({
+  const trialResult = {
     block: game.block,
     trial: game.trial,
     correct,
@@ -377,14 +480,23 @@ function submitCurrentTrial() {
     target: { ...game.currentTarget },
     clickCount: game.trialClickCount,
     mistakeClicks: game.trialMistakeClickCount,
-  });
+    difficulty: getDifficultyProfile().label,
+  };
+  game.sessionTrials.push(trialResult);
+  const adaptation = adaptDifficulty(trialResult);
 
   const trialTitle = `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`;
   if (correct) {
-    setStatus(trialTitle, `✅ 正確（RT ${rt} ms）`);
+    setStatus(
+      trialTitle,
+      `✅ 正確（RT ${rt} ms）｜難度：${adaptation.beforeLabel}${adaptation.changed ? ` → ${adaptation.afterLabel}` : ''}`,
+    );
     setFeedback('🎉 完全正確！', 'success');
   } else {
-    setStatus(trialTitle, `❌ 錯誤（RT ${rt} ms）`);
+    setStatus(
+      trialTitle,
+      `❌ 錯誤（RT ${rt} ms）｜難度：${adaptation.beforeLabel}${adaptation.changed ? ` → ${adaptation.afterLabel}` : ''}`,
+    );
     setFeedback('');
   }
 }
@@ -436,6 +548,12 @@ function summarizeSession() {
   const avgRtValue = rts.length > 0 ? Math.round(rts.reduce((sum, value) => sum + value, 0) / rts.length) : null;
   const speedScore = avgRtValue === null ? 0 : Math.max(0, Math.min(100, Math.round(100 - avgRtValue / 80)));
   const finalScore = Math.round(accuracy * 0.7 + speedScore * 0.3);
+  const avgDifficulty =
+    total === 0
+      ? '-'
+      : game.sessionTrials.map((trial) => DIFFICULTY_PROFILES.findIndex((profile) => profile.label === trial.difficulty) + 1);
+  const avgDifficultyLevel =
+    avgDifficulty === '-' ? '-' : (avgDifficulty.reduce((sum, value) => sum + value, 0) / total).toFixed(2);
 
   return {
     date: new Date().toLocaleString('zh-TW', { hour12: false }),
@@ -448,6 +566,7 @@ function summarizeSession() {
     finalScore,
     totalClicks,
     totalMistakeClicks,
+    avgDifficulty: avgDifficultyLevel,
   };
 }
 
@@ -460,6 +579,7 @@ function showResult(summary) {
     `操作正確率：${summary.accuracy}%（點錯再收回會扣分）`,
     `誤點次數：${summary.totalMistakeClicks} / ${summary.totalClicks} 次操作`,
     `平均反應時間：${summary.avgRt}`,
+    `平均難度等級：${summary.avgDifficulty}`,
     `速度分數：${summary.speedScore}`,
     `總分（正確率 70% + 速度 30%）：${summary.finalScore}`,
   ].forEach((text) => {
@@ -490,7 +610,7 @@ async function runTrial() {
 
   setStatus(
     `Block ${game.block}/${CONFIG.blocks} · Trial ${game.trial}/${CONFIG.trialsPerBlock}`,
-    `請選出 ${game.requiredMatchCount} 個與目標 Gabor Patch 相同的刺激`,
+    `難度：${generated.difficultyLabel}｜請選出 ${game.requiredMatchCount} 個與目標 Gabor Patch 相同的刺激`,
   );
   setFeedback('');
 
@@ -515,6 +635,7 @@ async function runSession() {
   game.trial = 0;
   game.sessionTrials = [];
   game.requiredMatchCount = null;
+  game.difficultyLevel = 1;
 
   startBtn.disabled = true;
   resultPanel.hidden = true;
