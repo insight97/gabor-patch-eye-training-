@@ -573,12 +573,17 @@ function initApp() {
     return;
   }
 
-  startBtn.addEventListener('click', () => {
-    if (game.running) {
+  const handleStartSession = () => {
+    if (game.running || startBtn.disabled) {
       return;
     }
     runSession();
-  });
+  };
+
+  startBtn.disabled = false;
+  startBtn.hidden = false;
+  startBtn.addEventListener('click', handleStartSession);
+  startBtn.addEventListener('pointerup', handleStartSession);
 
   optionsCanvas.addEventListener('click', toggleOptionAt);
   optionsCanvas.addEventListener('touchstart', (event) => {
